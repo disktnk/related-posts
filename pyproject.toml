@@ -7,6 +7,9 @@ requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4>=4.13.5",
     "mistune>=3.1.4",
+    "networkx>=3.5",
+    "plotly>=6.3.0",
+    "scikit-learn>=1.7.2",
     "sentencepiece>=0.2.1",
     "torch>=2.8.0",
     "transformers>=4.56.1",
