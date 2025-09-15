@@ -1,5 +1,7 @@
 import argparse
+import json
 import re
+import sys
 from pathlib import Path
 
 import mistune
@@ -59,6 +61,12 @@ def structured_text_from_markdown(md_content: str) -> str:
     return "\n".join(structured)
 
 
+def _logging_with_flush(msg: str, prev_len: int) -> None:
+    padding = max(0, prev_len - len(msg))
+    sys.stdout.write("\r" + msg + " " * padding)
+    sys.stdout.flush()
+
+
 def convert_structured_text(target: Path) -> list[dict]:
     """Convert markdown file or all markdown files in a directory to structured text.
 
@@ -92,13 +100,20 @@ def convert_structured_text(target: Path) -> list[dict]:
         return title_match.group(1).strip() if title_match else ""
 
     result_values = []
+    print("Progress of reading markdown files:")
     if target.is_dir():
         md_files = list(target.rglob("*.md"))
-        for md_file in md_files:
+        prev_len = 0
+        for idx, md_file in enumerate(md_files):
             structured_text = get_structured_text(md_file)
             if not structured_text:
                 continue
+
             title = extract_title(structured_text)
+
+            progress = f"[{idx+1}/{len(md_files)}] {title}"
+            prev_len = len(progress) if len(progress) > prev_len else prev_len
+            _logging_with_flush(progress, prev_len)
 
             result_values.append(
                 {
@@ -109,7 +124,14 @@ def convert_structured_text(target: Path) -> list[dict]:
             )
     else:
         structured_text = get_structured_text(target)
+        if not structured_text:
+            return result_values
+
         title = extract_title(structured_text)
+
+        progress = f"[1/1] {title}"
+        _logging_with_flush(progress, 0)
+
         result_values.append(
             {
                 "filepath": str(target.resolve()),
@@ -117,6 +139,8 @@ def convert_structured_text(target: Path) -> list[dict]:
                 "text": structured_text,
             }
         )
+
+    print()  # for newline after progress
     return result_values
 
 
@@ -137,7 +161,14 @@ def get_embedding(
     ```
     """
     vector_list = []
-    for text_dict in texts:
+    prev_len = 0
+    print("Progress of vectorization:")
+    for idx, text_dict in enumerate(texts):
+
+        progress = f"[{idx+1}/{len(texts)}] {text_dict['title']}"
+        prev_len = len(progress) if len(progress) > prev_len else prev_len
+        _logging_with_flush(progress, prev_len)
+
         text = text_dict["text"]
         inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
         with torch.no_grad():
@@ -153,10 +184,17 @@ def get_embedding(
             {
                 "filepath": text_dict["filepath"],
                 "title": text_dict["title"],
-                "vector": vec,
+                "vector": vec.tolist(),
             }
         )
+    print()  # for newline after progress
     return vector_list
+
+
+def save_json(vectors: list[dict], output_file: str) -> None:
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(vectors, f, ensure_ascii=False, indent=2)
+    print(f"Saved embeddings to {output_file}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -169,6 +207,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="pfnet/plamo-embedding-1b",
         help="The embedding model to use.",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="vectors.json",
+        help="The output file to save the embeddings.",
     )
     return parser.parse_args()
 
@@ -183,4 +227,4 @@ if __name__ == "__main__":
     model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
     vectors = get_embedding(plain_texts, tokenizer, model)
 
-    print("vector:", vectors)
+    save_json(vectors, args.output)
