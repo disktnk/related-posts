@@ -61,6 +61,7 @@ def structured_text_from_markdown(md_content: str) -> str:
 
 def convert_structured_text(target: Path) -> list[dict]:
     """Convert markdown file or all markdown files in a directory to structured text.
+
     Return dict structure is:
     ```
     [
@@ -122,6 +123,19 @@ def convert_structured_text(target: Path) -> list[dict]:
 def get_embedding(
     texts: list[dict], tokenizer: AutoTokenizer, model: AutoModel
 ) -> list[dict]:
+    """Get embeddings for a list of texts.
+
+    Return dict structure is:
+    ```
+    [
+        {
+            "filepath": "absolute path of the file",
+            "title": "title of the file",
+            "vector": [numpy array of the embedding vector]
+        }, ...
+    ]
+    ```
+    """
     vector_list = []
     for text_dict in texts:
         text = text_dict["text"]
