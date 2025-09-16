@@ -71,6 +71,18 @@ def parse_args() -> argparse.Namespace:
         help="The target JSONL file",
     )
     parser.add_argument(
+        "--k",
+        type=int,
+        default=4,
+        help="The number of neighbors",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.65,
+        help="The similarity threshold",
+    )
+    parser.add_argument(
         "--output",
         type=str,
         default="graph.html",
@@ -102,7 +114,5 @@ if __name__ == "__main__":
             vec = json.loads(line)
             vectors.append(vec)
 
-    k = 4  # number of neighbors
-    threshold = 0.65  # similarity threshold
-    G = calc_knn(vectors, k, threshold=threshold)
+    G = calc_knn(vectors, args.k, threshold=args.threshold)
     make_graph(G, args.output)
