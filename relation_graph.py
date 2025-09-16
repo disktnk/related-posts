@@ -1,17 +1,26 @@
 import argparse
 import json
+from typing import Any, Dict, List
 
 import networkx as nx
 import numpy as np
-from pyvis.network import Network
-from sklearn.neighbors import NearestNeighbors
+from pyvis.network import Network  # type: ignore
+from sklearn.neighbors import NearestNeighbors  # type: ignore
 
 
-def make_graph(G: nx.Graph, output_file: str) -> list[dict]:
+def make_graph(G: nx.Graph, output_file: str) -> None:
+    """Create a network graph visualization and return node information.
 
+    Args:
+        G: Input graph
+        output_file: HTML output file path
+
+    Returns:
+        List of node dictionaries with position and other attributes
+    """
     if G.number_of_nodes() == 0:
         print("No nodes to plot.")
-        return []
+        return
 
     nt = Network(height="700px", width="1000px", notebook=False)
 
@@ -29,20 +38,20 @@ def make_graph(G: nx.Graph, output_file: str) -> list[dict]:
     nt.save_graph(output_file)
 
 
-def calc_knn(vectors: list[dict], k: int, threshold: float) -> list[dict]:
+def calc_knn(vectors: List[Dict[str, Any]], k: int, threshold: float) -> nx.Graph:
     # vectors: list or array shape (n, d)
     X = np.vstack([v["vector"] for v in vectors])  # shape (n,d)
 
     # L2 normalization (cosine = dot)
     X_norm = X / np.linalg.norm(X, axis=1, keepdims=True)
 
-    k = 5  # Number of neighbors for each node
+    # Use the k parameter instead of hardcoded 5
     nn = NearestNeighbors(n_neighbors=k + 1, metric="cosine").fit(X_norm)
     distances, indices = nn.kneighbors(X_norm, return_distance=True)
     # distances = 0..2 (cosine distance); similarity = 1 - distance
     sims = 1.0 - distances
 
-    G = nx.Graph()
+    G: nx.Graph = nx.Graph()
     for i in range(X_norm.shape[0]):
         G.add_node(i, title=vectors[i].get("title", ""))
 
@@ -108,7 +117,7 @@ if __name__ == "__main__":
     ```
     """
 
-    vectors = []
+    vectors: List[Dict[str, Any]] = []
     with open(input_file, "r", encoding="utf-8") as f:
         for line in f:
             vec = json.loads(line)

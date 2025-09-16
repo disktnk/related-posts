@@ -3,7 +3,7 @@
 First, make embedding list
 
 ```sh
-$ uv run markdown_vector.py example.md
+$ uv run markdown_vector.py path/to/markdowns
 ```
 
 vectors.jsonl will be saved.
@@ -28,4 +28,5 @@ format check
 ```sh
 $ uv run block .
 $ uv run ruff check . --fix
+$ uv run mypy .
 ```
