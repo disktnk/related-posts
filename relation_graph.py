@@ -3,18 +3,40 @@ import json
 
 import networkx as nx
 import numpy as np
-import plotly.graph_objects as go
+from pyvis.network import Network
 from sklearn.neighbors import NearestNeighbors
 
 
-def calc_knn(vectors: list[dict], k: int = 5, threshold: float = 0.5) -> list[dict]:
+def make_graph(G: nx.Graph, output_file: str) -> list[dict]:
+
+    if G.number_of_nodes() == 0:
+        print("No nodes to plot.")
+        return []
+
+    nt = Network(height="700px", width="1000px", notebook=False)
+
+    for n, attr in G.nodes(data=True):
+        nt.add_node(n, label=attr.get("title", ""), title=attr.get("title", ""))
+
+    for u, v, d in G.edges(data=True):
+        weight = d.get("weight", 0.5)
+        # adjust edge width based on weight
+        width = 0.5 + 4.5 * weight
+        nt.add_edge(u, v, value=width, title=f"Similarity: {weight:.4f}")
+
+    nt.barnes_hut(gravity=-2000, central_gravity=0.3, spring_length=150)
+
+    nt.save_graph(output_file)
+
+
+def calc_knn(vectors: list[dict], k: int, threshold: float) -> list[dict]:
     # vectors: list or array shape (n, d)
     X = np.vstack([v["vector"] for v in vectors])  # shape (n,d)
 
-    # L2 正規化（cosine = dot）
+    # L2 normalization (cosine = dot)
     X_norm = X / np.linalg.norm(X, axis=1, keepdims=True)
 
-    k = 5  # 各ノードの近傍数
+    k = 5  # Number of neighbors for each node
     nn = NearestNeighbors(n_neighbors=k + 1, metric="cosine").fit(X_norm)
     distances, indices = nn.kneighbors(X_norm, return_distance=True)
     # distances = 0..2 (cosine distance); similarity = 1 - distance
@@ -36,64 +58,7 @@ def calc_knn(vectors: list[dict], k: int = 5, threshold: float = 0.5) -> list[di
                 else:
                     G.add_edge(i, j, weight=sim)
 
-    if G.number_of_nodes() == 0:
-        print("No nodes to plot.")
-        return
-
-    # layout: spring_layout (can be slow for large graphs)
-    pos = nx.spring_layout(G, k=0.3, seed=42)
-
-    # edge traces
-    edge_x, edge_y = [], []
-    edge_widths = []
-    for u, v, d in G.edges(data=True):
-        x0, y0 = pos[u]
-        x1, y1 = pos[v]
-        edge_x += [x0, x1, None]
-        edge_y += [y0, y1, None]
-        edge_widths.append(d.get("weight", 0.5))
-
-    edge_trace = go.Scatter(
-        x=edge_x,
-        y=edge_y,
-        mode="lines",
-        line=dict(color="rgba(100,100,200,0.6)", width=1),
-        hoverinfo="none",
-    )
-
-    # node traces
-    node_x, node_y, node_text = [], [], []
-    node_size = []
-    for n in G.nodes():
-        x, y = pos[n]
-        node_x.append(x)
-        node_y.append(y)
-        title = G.nodes[n].get("title", "")
-        deg = G.degree[n]
-        node_text.append(f"{n}: {title} (deg={deg})")
-        node_size.append(6 + deg * 2)
-
-    node_trace = go.Scatter(
-        x=node_x,
-        y=node_y,
-        mode="markers",
-        marker=dict(
-            size=node_size, color="skyblue", line=dict(width=1, color="DarkSlateGrey")
-        ),
-        text=node_text,
-        hoverinfo="text",
-    )
-
-    fig = go.Figure(data=[edge_trace, node_trace])
-    fig.update_layout(
-        title=f"Embedding similarity graph (k={k}, threshold={threshold})",
-        showlegend=False,
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        height=700,
-        width=900,
-    )
-    fig.write_html("graph.html", include_plotlyjs="cdn", full_html=True)
+    return G
 
 
 def parse_args() -> argparse.Namespace:
@@ -104,6 +69,12 @@ def parse_args() -> argparse.Namespace:
         "input",
         type=str,
         help="The target JSONL file",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="graph.html",
+        help="The output HTML file",
     )
     return parser.parse_args()
 
@@ -131,4 +102,7 @@ if __name__ == "__main__":
             vec = json.loads(line)
             vectors.append(vec)
 
-    calc_knn(vectors, k=5, threshold=0.5)
+    k = 4  # number of neighbors
+    threshold = 0.65  # similarity threshold
+    G = calc_knn(vectors, k, threshold=threshold)
+    make_graph(G, args.output)
