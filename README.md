@@ -1,10 +1,20 @@
 ## Run
 
+First, make embedding list
+
 ```sh
 $ uv run markdown_vector.py example.md
 ```
 
-vectors.json will be saved.
+vectors.jsonl will be saved.
+
+Next, make relation graph
+
+```sh
+$ uv run relation_graph.py vectors.jsonl
+```
+
+then, graph.html will be saved.
 
 ## Development
 
