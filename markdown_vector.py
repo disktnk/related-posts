@@ -6,6 +6,7 @@ from pathlib import Path
 
 import mistune
 import torch
+import tqdm
 from bs4 import BeautifulSoup
 from transformers import AutoModel, AutoTokenizer
 
@@ -61,12 +62,6 @@ def structured_text_from_markdown(md_content: str) -> str:
     return "\n".join(structured)
 
 
-def _logging_with_flush(msg: str, prev_len: int) -> None:
-    padding = max(0, prev_len - len(msg))
-    sys.stdout.write("\r" + msg + " " * padding)
-    sys.stdout.flush()
-
-
 def convert_structured_text(target: Path) -> list[dict]:
     """Convert markdown file or all markdown files in a directory to structured text.
 
@@ -100,37 +95,32 @@ def convert_structured_text(target: Path) -> list[dict]:
         return title_match.group(1).strip() if title_match else ""
 
     result_values = []
-    print("Progress of reading markdown files:")
+    print("Convert markdown files to structured text...")
     if target.is_dir():
         md_files = list(target.rglob("*.md"))
-        prev_len = 0
-        for idx, md_file in enumerate(md_files):
-            structured_text = get_structured_text(md_file)
-            if not structured_text:
-                continue
+        with tqdm.tqdm(md_files) as pbar:
+            for md_file in pbar:
+                structured_text = get_structured_text(md_file)
+                if not structured_text:
+                    continue
 
-            title = extract_title(structured_text)
+                title = extract_title(structured_text)
 
-            progress = f"[{idx+1}/{len(md_files)}] {title}"
-            prev_len = len(progress) if len(progress) > prev_len else prev_len
-            _logging_with_flush(progress, prev_len)
+                pbar.set_postfix({"title": title})
 
-            result_values.append(
-                {
-                    "filepath": str(md_file.resolve()),
-                    "title": title,
-                    "text": structured_text,
-                }
-            )
+                result_values.append(
+                    {
+                        "filepath": str(md_file.resolve()),
+                        "title": title,
+                        "text": structured_text,
+                    }
+                )
     else:
         structured_text = get_structured_text(target)
         if not structured_text:
             return result_values
 
         title = extract_title(structured_text)
-
-        progress = f"[1/1] {title}"
-        _logging_with_flush(progress, 0)
 
         result_values.append(
             {
@@ -140,7 +130,6 @@ def convert_structured_text(target: Path) -> list[dict]:
             }
         )
 
-    print()  # for newline after progress
     return result_values
 
 
@@ -162,39 +151,38 @@ def get_embedding(
     """
     vector_list = []
     prev_len = 0
-    print("Progress of vectorization:")
-    for idx, text_dict in enumerate(texts):
+    print("Make embeddings...")
+    with tqdm.tqdm(texts) as pbar:
+        for text_dict in pbar:
+            pbar.set_postfix({"title": text_dict["title"]})
 
-        progress = f"[{idx+1}/{len(texts)}] {text_dict['title']}"
-        prev_len = len(progress) if len(progress) > prev_len else prev_len
-        _logging_with_flush(progress, prev_len)
-
-        text = text_dict["text"]
-        inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
-        with torch.no_grad():
-            outputs = model(**inputs)
-        embeddings = outputs.last_hidden_state
-        attention_mask = inputs["attention_mask"].unsqueeze(-1)
-        masked_embeddings = embeddings * attention_mask
-        summed = masked_embeddings.sum(dim=1)
-        counts = attention_mask.sum(dim=1)
-        mean_pooled = summed / counts
-        vec = mean_pooled.squeeze().numpy()
-        vector_list.append(
-            {
-                "filepath": text_dict["filepath"],
-                "title": text_dict["title"],
-                "vector": vec.tolist(),
-            }
-        )
-    print()  # for newline after progress
+            text = text_dict["text"]
+            inputs = tokenizer(
+                text, return_tensors="pt", truncation=True, max_length=512
+            )
+            with torch.no_grad():
+                outputs = model(**inputs)
+            embeddings = outputs.last_hidden_state
+            attention_mask = inputs["attention_mask"].unsqueeze(-1)
+            masked_embeddings = embeddings * attention_mask
+            summed = masked_embeddings.sum(dim=1)
+            counts = attention_mask.sum(dim=1)
+            mean_pooled = summed / counts
+            vec = mean_pooled.squeeze().numpy()
+            vector_list.append(
+                {
+                    "filepath": text_dict["filepath"],
+                    "title": text_dict["title"],
+                    "vector": vec.tolist(),
+                }
+            )
     return vector_list
 
 
 def save_json(vectors: list[dict], output_file: str) -> None:
+    print(f"Saving embedded vectors to JSON, {output_file} ...")
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(vectors, f, ensure_ascii=False, indent=2)
-    print(f"Saved embeddings to {output_file}")
 
 
 def parse_args() -> argparse.Namespace:
