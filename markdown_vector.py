@@ -4,10 +4,9 @@ import re
 from pathlib import Path
 
 import mistune
-import torch
 import tqdm
 from bs4 import BeautifulSoup
-from transformers import AutoModel, AutoTokenizer
+from sentence_transformers import SentenceTransformer
 
 
 def preprocess_markdown(md_content: str) -> str:
@@ -42,19 +41,19 @@ def structured_text_from_markdown(md_content: str) -> str:
 
     structured = []
     # extract <title> ... </title>
-    title_match = re.search(r"<title>(.*?)</title>", html_content, flags=re.DOTALL)
+    title_match = re.search(r"<title>(.*?)</title>", str(html_content), flags=re.DOTALL)
     if title_match:
         title = title_match.group(1).strip()
         structured.append(f"[TITLE] {title}")
     # extract headings
     for level in range(1, 7):
         headings = re.findall(
-            rf"<h{level}>(.*?)</h{level}>", html_content, flags=re.DOTALL
+            rf"<h{level}>(.*?)</h{level}>", str(html_content), flags=re.DOTALL
         )
         structured += [f"[HEADING{level}] {h}" for h in headings]
 
     # convert to plain text using BeautifulSoup
-    soup = BeautifulSoup(html_content, "html.parser")
+    soup = BeautifulSoup(str(html_content), "html.parser")
     plain_text = soup.get_text()
     structured += [f"[BODY] {plain_text}"]
 
@@ -132,10 +131,8 @@ def convert_structured_text(target: Path) -> list[dict]:
     return result_values
 
 
-def get_embedding(
-    texts: list[dict], tokenizer: AutoTokenizer, model: AutoModel
-) -> list[dict]:
-    """Get embeddings for a list of texts.
+def get_embedding(texts: list[dict], model_name: str) -> list[dict]:
+    """Get embeddings for a list of texts using SentenceTransformers.
 
     Return dict structure is:
     ```
@@ -149,32 +146,27 @@ def get_embedding(
     ```
     """
     vector_list = []
-    prev_len = 0
-    print("Make embeddings...")
-    with tqdm.tqdm(texts) as pbar:
-        for text_dict in pbar:
-            pbar.set_postfix({"title": text_dict["title"]})
+    print(f"Make embeddings using {model_name}...")
 
-            text = text_dict["text"]
-            inputs = tokenizer(
-                text, return_tensors="pt", truncation=True, max_length=512
-            )
-            with torch.no_grad():
-                outputs = model(**inputs)
-            embeddings = outputs.last_hidden_state
-            attention_mask = inputs["attention_mask"].unsqueeze(-1)
-            masked_embeddings = embeddings * attention_mask
-            summed = masked_embeddings.sum(dim=1)
-            counts = attention_mask.sum(dim=1)
-            mean_pooled = summed / counts
-            vec = mean_pooled.squeeze().numpy()
-            vector_list.append(
-                {
-                    "filepath": text_dict["filepath"],
-                    "title": text_dict["title"],
-                    "vector": vec.tolist(),
-                }
-            )
+    model = SentenceTransformer(model_name, trust_remote_code=True)
+
+    text_contents = [text_dict["text"] for text_dict in texts]
+    filepaths = [text_dict["filepath"] for text_dict in texts]
+    titles = [text_dict["title"] for text_dict in texts]
+
+    embeddings = model.encode(
+        text_contents, show_progress_bar=True, batch_size=8, convert_to_numpy=True
+    )
+
+    for i, embedding in enumerate(embeddings):
+        vector_list.append(
+            {
+                "filepath": filepaths[i],
+                "title": titles[i],
+                "vector": embedding.tolist(),
+            }
+        )
+
     return vector_list
 
 
@@ -210,9 +202,6 @@ if __name__ == "__main__":
     target = Path(args.target)
     plain_texts = convert_structured_text(target)
 
-    model_name = args.embedding_model
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
-    vectors = get_embedding(plain_texts, tokenizer, model)
+    vectors = get_embedding(plain_texts, args.embedding_model)
 
     save_jsonl(vectors, args.output)

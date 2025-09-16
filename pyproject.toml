@@ -10,6 +10,7 @@ dependencies = [
     "networkx>=3.5",
     "pyvis>=0.3.2",
     "scikit-learn>=1.7.2",
+    "sentence-transformers>=5.1.0",
     "sentencepiece>=0.2.1",
     "torch>=2.8.0",
     "tqdm>=4.67.1",
@@ -21,6 +22,8 @@ dev = [
     "black>=25.1.0",
     "mypy>=1.18.1",
     "ruff>=0.13.0",
+    "types-networkx>=3.5.0.20250914",
+    "types-tqdm>=4.67.0.20250809",
 ]
 
 [tool.black]
