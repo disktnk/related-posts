@@ -1,7 +1,6 @@
 import argparse
 import json
 import re
-import sys
 from pathlib import Path
 
 import mistune
@@ -179,10 +178,11 @@ def get_embedding(
     return vector_list
 
 
-def save_json(vectors: list[dict], output_file: str) -> None:
-    print(f"Saving embedded vectors to JSON, {output_file} ...")
+def save_jsonl(vectors: list[dict], output_file: str) -> None:
+    print(f"Saving embedded vectors to JSONL, {output_file} ...")
     with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(vectors, f, ensure_ascii=False, indent=2)
+        for vec in vectors:
+            f.write(json.dumps(vec, ensure_ascii=False) + "\n")
 
 
 def parse_args() -> argparse.Namespace:
@@ -199,7 +199,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=str,
-        default="vectors.json",
+        default="vectors.jsonl",
         help="The output file to save the embeddings.",
     )
     return parser.parse_args()
@@ -215,4 +215,4 @@ if __name__ == "__main__":
     model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
     vectors = get_embedding(plain_texts, tokenizer, model)
 
-    save_json(vectors, args.output)
+    save_jsonl(vectors, args.output)
