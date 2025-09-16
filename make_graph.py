@@ -1,3 +1,6 @@
+import argparse
+import json
+
 import networkx as nx
 import numpy as np
 import plotly.graph_objects as go
@@ -90,4 +93,42 @@ def calc_knn(vectors: list[dict], k: int = 5, threshold: float = 0.5) -> list[di
         height=700,
         width=900,
     )
-    fig.show()
+    fig.write_html("graph.html", include_plotlyjs="cdn", full_html=True)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Relation graph from embedding vectors."
+    )
+    parser.add_argument(
+        "input",
+        type=str,
+        help="The target JSONL file",
+    )
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    input_file = args.input
+
+    """
+    Input vector dict structure is:
+    ```
+    [
+        {
+            "filepath": "absolute path of the file",
+            "title": "title of the file",
+            "vector": [numpy array of the embedding vector]
+        }, ...
+    ]
+    ```
+    """
+
+    vectors = []
+    with open(input_file, "r", encoding="utf-8") as f:
+        for line in f:
+            vec = json.loads(line)
+            vectors.append(vec)
+
+    calc_knn(vectors, k=5, threshold=0.5)
