@@ -3,3 +3,5 @@ lib/
 *.json
 *.jsonl
 *.html
+
+!example.md

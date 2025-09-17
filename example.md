@@ -34,4 +34,6 @@ shortcodeは消される
 {{< custom shortcode multiline
   arg="test" >}}
 
+相対パス解決のshortcodeは、テキストを残す [text]({{< relref ../patah>}})
+
 [^1]: 脚注1
