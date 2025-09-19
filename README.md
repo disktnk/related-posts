@@ -3,7 +3,7 @@
 First, make embedding list
 
 ```sh
-$ uv run markdown_vector.py path/to/markdowns
+$ uv run embed_markdown.py path/to/markdowns
 ```
 
 `vectors.jsonl` will be saved.
@@ -11,7 +11,7 @@ $ uv run markdown_vector.py path/to/markdowns
 Next, make relation graph from `vectors.jsonl`
 
 ```sh
-$ uv run relation_graph.py --mode save_graph
+$ uv run create_similarity_graph.py --mode save_graph
 ```
 
 then, `graph.html` will be saved.
