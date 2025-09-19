@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -58,6 +59,10 @@ def convert_clarified_markdown(target: Path) -> list[dict]:
         title_match = re.search(r"#\s*(.*)", structured_text)
         return title_match.group(1).strip() if title_match else ""
 
+    def get_hash(text: str) -> str:
+        encoded = text.encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
     result_values = []
     print("Convert markdown files to structured text...")
     if target.is_dir():
@@ -71,6 +76,7 @@ def convert_clarified_markdown(target: Path) -> list[dict]:
                     continue
 
                 title = extract_title(md_content)
+                content_hash = get_hash(md_content)
 
                 pbar.set_postfix({"title": title})
 
@@ -78,6 +84,7 @@ def convert_clarified_markdown(target: Path) -> list[dict]:
                     {
                         "filepath": str(md_file.resolve()),
                         "title": title,
+                        "hash": content_hash,
                         "text": md_content,
                     }
                 )
@@ -89,11 +96,13 @@ def convert_clarified_markdown(target: Path) -> list[dict]:
             return result_values
 
         title = extract_title(md_content)
+        content_hash = get_hash(md_content)
 
         result_values.append(
             {
                 "filepath": str(target.resolve()),
                 "title": title,
+                "hash": content_hash,
                 "text": md_content,
             }
         )
@@ -101,7 +110,7 @@ def convert_clarified_markdown(target: Path) -> list[dict]:
     return result_values
 
 
-def get_embedding(texts: list[dict], model_name: str) -> list[dict]:
+def get_embedding(texts: list[dict], model_name: str, prev: str) -> list[dict]:
     """Get embeddings for a list of texts using SentenceTransformers.
 
     Return dict structure is:
@@ -115,15 +124,35 @@ def get_embedding(texts: list[dict], model_name: str) -> list[dict]:
     ]
     ```
     """
-    vector_list = []
     print(f"Make embeddings using {model_name}...")
 
+    vector_list = []
+    prev_vector_map = {}
+    if prev:
+        with open(prev, "r", encoding="utf-8") as f:
+            for line in f:
+                vec = json.loads(line)
+                prev_vector_map[vec["filepath"]] = vec
+
+    text_contents = []
+    filepaths = []
+    titles = []
+    hashes = []
+    for text_dict in texts:
+        if text_dict["filepath"] in prev_vector_map:
+            if prev_vector_map[text_dict["filepath"]]["hash"] == text_dict["hash"]:
+                vector_list.append(prev_vector_map[text_dict["filepath"]])
+                continue
+        text_contents.append(text_dict["text"])
+        filepaths.append(text_dict["filepath"])
+        titles.append(text_dict["title"])
+        hashes.append(text_dict["hash"])
+
+    if not text_contents:
+        print("No new or updated files to embed.")
+        return vector_list
+
     model = SentenceTransformer(model_name, trust_remote_code=True)
-
-    text_contents = [text_dict["text"] for text_dict in texts]
-    filepaths = [text_dict["filepath"] for text_dict in texts]
-    titles = [text_dict["title"] for text_dict in texts]
-
     embeddings = model.encode(
         text_contents, show_progress_bar=True, batch_size=8, convert_to_numpy=True
     )
@@ -133,6 +162,7 @@ def get_embedding(texts: list[dict], model_name: str) -> list[dict]:
             {
                 "filepath": filepaths[i],
                 "title": titles[i],
+                "hash": hashes[i],
                 "vector": embedding.tolist(),
             }
         )
@@ -151,6 +181,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Vectorize markdown files.")
     parser.add_argument(
         "target", type=str, help="The target file or directory to vectorize."
+    )
+    parser.add_argument(
+        "--prev", type=str, help="The previous vectors file to compare."
     )
     parser.add_argument(
         "--embedding-model",
@@ -172,6 +205,6 @@ if __name__ == "__main__":
     target = Path(args.target)
     plain_texts = convert_clarified_markdown(target)
 
-    vectors = get_embedding(plain_texts, args.embedding_model)
+    vectors = get_embedding(plain_texts, args.embedding_model, args.prev)
 
     save_jsonl(vectors, args.output)
