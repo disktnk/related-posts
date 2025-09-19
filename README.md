@@ -6,15 +6,15 @@ First, make embedding list
 $ uv run markdown_vector.py path/to/markdowns
 ```
 
-vectors.jsonl will be saved.
+`vectors.jsonl` will be saved.
 
-Next, make relation graph
+Next, make relation graph from `vectors.jsonl`
 
 ```sh
-$ uv run relation_graph.py vectors.jsonl
+$ uv run relation_graph.py --mode save_graph
 ```
 
-then, graph.html will be saved.
+then, `graph.html` will be saved.
 
 ## Development
 
