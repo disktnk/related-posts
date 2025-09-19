@@ -1,6 +1,6 @@
 import argparse
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import networkx as nx
 import numpy as np
@@ -8,7 +8,7 @@ from pyvis.network import Network  # type: ignore
 from sklearn.neighbors import NearestNeighbors  # type: ignore
 
 
-def make_graph(G: nx.Graph, output_file: str) -> None:
+def save_graph(G: nx.Graph, output_file: str) -> None:
     """Create a network graph visualization and return node information.
 
     Args:
@@ -38,19 +38,14 @@ def make_graph(G: nx.Graph, output_file: str) -> None:
     nt.save_graph(output_file)
 
 
-def calc_knn(vectors: List[Dict[str, Any]], k: int, threshold: float) -> nx.Graph:
-    # vectors: list or array shape (n, d)
-    X = np.vstack([v["vector"] for v in vectors])  # shape (n,d)
-
-    # L2 normalization (cosine = dot)
-    X_norm = X / np.linalg.norm(X, axis=1, keepdims=True)
-
-    # Use the k parameter instead of hardcoded 5
-    nn = NearestNeighbors(n_neighbors=k + 1, metric="cosine").fit(X_norm)
-    distances, indices = nn.kneighbors(X_norm, return_distance=True)
-    # distances = 0..2 (cosine distance); similarity = 1 - distance
-    sims = 1.0 - distances
-
+def make_graph(
+    vectors: List[Dict[str, Any]],
+    X_norm: np.ndarray,
+    indices: np.ndarray,
+    sims: np.ndarray,
+    threshold: float,
+    output_file: str,
+) -> None:
     G: nx.Graph = nx.Graph()
     for i in range(X_norm.shape[0]):
         G.add_node(i, title=vectors[i].get("title", ""))
@@ -67,7 +62,53 @@ def calc_knn(vectors: List[Dict[str, Any]], k: int, threshold: float) -> nx.Grap
                 else:
                     G.add_edge(i, j, weight=sim)
 
-    return G
+    save_graph(G, output_file)
+
+
+def save_similarity(
+    vectors: List[Dict[str, Any]],
+    X_norm: np.ndarray,
+    indices: np.ndarray,
+    sims: np.ndarray,
+    threshold: float,
+    output_file: str,
+) -> None:
+    # Create similarity list, own filepath, target filepath, similarity
+    similarity_list = []
+    for i in range(X_norm.shape[0]):
+        for j_idx, sim in zip(indices[i, 1:], sims[i, 1:]):  # skip self
+            sim = float(sim)
+            j = int(j_idx)
+            if sim >= threshold:
+                similarity_list.append(
+                    {
+                        "source": vectors[i]["filepath"],
+                        "target": vectors[j]["filepath"],
+                        "similarity": sim,
+                    }
+                )
+
+    # Save similarity list to JSON, similarity.json
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(similarity_list, f, ensure_ascii=False, indent=2)
+
+
+def calc_knn(
+    vectors: List[Dict[str, Any]], k: int
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    # vectors: list or array shape (n, d)
+    X = np.vstack([v["vector"] for v in vectors])  # shape (n,d)
+
+    # L2 normalization (cosine = dot)
+    X_norm = X / np.linalg.norm(X, axis=1, keepdims=True)
+
+    # Use the k parameter instead of hardcoded 5
+    nn = NearestNeighbors(n_neighbors=k + 1, metric="cosine").fit(X_norm)
+    distances, indices = nn.kneighbors(X_norm, return_distance=True)
+    # distances = 0..2 (cosine distance); similarity = 1 - distance
+    sims = 1.0 - distances
+
+    return X_norm, indices, sims
 
 
 def parse_args() -> argparse.Namespace:
@@ -75,8 +116,9 @@ def parse_args() -> argparse.Namespace:
         description="Relation graph from embedding vectors."
     )
     parser.add_argument(
-        "input",
+        "--input",
         type=str,
+        default="vectors.jsonl",
         help="The target JSONL file",
     )
     parser.add_argument(
@@ -91,10 +133,17 @@ def parse_args() -> argparse.Namespace:
         default=0.65,
         help="The similarity threshold",
     )
+    # choice from 'save_graph', 'save_similarity', 'both'
+    parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["save_graph", "save_similarity", "both"],
+        default="save_similarity",
+        help="The mode of operation",
+    )
     parser.add_argument(
         "--output",
         type=str,
-        default="graph.html",
         help="The output HTML file",
     )
     return parser.parse_args()
@@ -123,5 +172,10 @@ if __name__ == "__main__":
             vec = json.loads(line)
             vectors.append(vec)
 
-    G = calc_knn(vectors, args.k, threshold=args.threshold)
-    make_graph(G, args.output)
+    X_norm, indices, sims = calc_knn(vectors, args.k)
+    if args.mode in ("save_similarity", "both"):
+        output_file = f"{args.output}.json" if args.output else "similarity.json"
+        save_similarity(vectors, X_norm, indices, sims, args.threshold, output_file)
+    if args.mode in ("save_graph", "both"):
+        output_file = f"{args.output}.html" if args.output else "graph.html"
+        make_graph(vectors, X_norm, indices, sims, args.threshold, output_file)
