@@ -110,7 +110,7 @@ def convert_clarified_markdown(target: Path) -> list[dict]:
     return result_values
 
 
-def get_embedding(texts: list[dict], model_name: str, prev: str) -> list[dict]:
+def get_embedding(texts: list[dict], model_name: str, prev: Path) -> list[dict]:
     """Get embeddings for a list of texts using SentenceTransformers.
 
     Return dict structure is:
@@ -128,7 +128,7 @@ def get_embedding(texts: list[dict], model_name: str, prev: str) -> list[dict]:
 
     vector_list = []
     prev_vector_map = {}
-    if prev:
+    if prev and prev.is_file():
         with open(prev, "r", encoding="utf-8") as f:
             for line in f:
                 vec = json.loads(line)
@@ -183,7 +183,10 @@ def parse_args() -> argparse.Namespace:
         "target", type=str, help="The target file or directory to vectorize."
     )
     parser.add_argument(
-        "--prev", type=str, help="The previous vectors file to compare."
+        "--prev",
+        type=str,
+        default="vectors.jsonl",
+        help="The previous vectors file to compare.",
     )
     parser.add_argument(
         "--embedding-model",
@@ -202,9 +205,8 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_args()
-    target = Path(args.target)
-    plain_texts = convert_clarified_markdown(target)
+    plain_texts = convert_clarified_markdown(Path(args.target))
 
-    vectors = get_embedding(plain_texts, args.embedding_model, args.prev)
+    vectors = get_embedding(plain_texts, args.embedding_model, Path(args.prev))
 
     save_jsonl(vectors, args.output)
