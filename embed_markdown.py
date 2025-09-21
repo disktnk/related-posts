@@ -180,6 +180,8 @@ def get_embedding(texts: list[dict], model_name: str, prev: Path) -> list[dict]:
 
 def save_jsonl(vectors: list[dict], output_file: str) -> None:
     print(f"Saving embedded vectors to JSONL, {output_file} ...")
+    # sort by filepath
+    vectors.sort(key=lambda x: x["filepath"])
     with open(output_file, "w", encoding="utf-8") as f:
         for vec in vectors:
             f.write(json.dumps(vec, ensure_ascii=False) + "\n")

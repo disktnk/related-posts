@@ -88,6 +88,9 @@ def save_similarity(
                     }
                 )
 
+    # sort by source and similarity descending
+    similarity_list.sort(key=lambda x: (x["source"], -x["similarity"]))
+
     # Save similarity list to JSON, similarity.json
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(similarity_list, f, ensure_ascii=False, indent=2)
