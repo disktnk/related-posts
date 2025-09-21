@@ -1,11 +1,19 @@
 import argparse
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 
 import tqdm
 from sentence_transformers import SentenceTransformer
+
+
+def _to_relative(p: Path) -> str:
+    try:
+        return os.path.relpath(str(p), start=str(Path.cwd()))
+    except Exception:
+        return str(p)
 
 
 def preprocess_markdown(md_content: str) -> str:
@@ -82,7 +90,7 @@ def convert_clarified_markdown(target: Path) -> list[dict]:
 
                 result_values.append(
                     {
-                        "filepath": str(md_file.resolve()),
+                        "filepath": _to_relative(md_file),
                         "title": title,
                         "hash": content_hash,
                         "text": md_content,
@@ -100,7 +108,7 @@ def convert_clarified_markdown(target: Path) -> list[dict]:
 
         result_values.append(
             {
-                "filepath": str(target.resolve()),
+                "filepath": _to_relative(target),
                 "title": title,
                 "hash": content_hash,
                 "text": md_content,
