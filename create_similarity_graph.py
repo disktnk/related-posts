@@ -77,7 +77,7 @@ def save_similarity(
     similarity_list = []
     for i in range(X_norm.shape[0]):
         for j_idx, sim in zip(indices[i, 1:], sims[i, 1:]):  # skip self
-            sim = float(sim)
+            sim = round(float(sim), 4)
             j = int(j_idx)
             if sim >= threshold:
                 similarity_list.append(

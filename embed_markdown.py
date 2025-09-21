@@ -171,7 +171,7 @@ def get_embedding(texts: list[dict], model_name: str, prev: Path) -> list[dict]:
                 "filepath": filepaths[i],
                 "title": titles[i],
                 "hash": hashes[i],
-                "vector": embedding.tolist(),
+                "vector": [round(float(x), 4) for x in embedding.tolist()],
             }
         )
 
